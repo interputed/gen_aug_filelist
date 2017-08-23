@@ -9,6 +9,7 @@
 typedef unsigned int uint;
 
 void LoadData(const std::string path, std::vector<std::string> &data);
+void WriteData(const std::string path, std::vector<std::string> &data);
 std::vector<std::string> ParseCategories(std::vector<std::string> &data);
 std::vector<std::string> AppendStuff(std::vector<std::string> &data, const std::string ext, const uint step);
 
@@ -98,6 +99,15 @@ int main(int argc, char **argv)
 
         std::vector<std::string> output_data = AppendStuff(file_data, type, rotation_step);
 
+        if (verbosity) {
+            for (auto &s : output_data) {
+                std::cout << s << std::endl;
+            }
+        }
+
+        WriteData("output.txt", output_data);
+
+
 
         // Categories seem largely unnecessary in C++, wrote a parser before realizing this...
 //        std::vector<std::string> categories = ParseCategories(file_data);
@@ -142,6 +152,15 @@ void LoadData(const std::string path, std::vector<std::string> &data)
     // TODO: Error handling
 }
 
+void WriteData(const std::string path, std::vector<std::string> &data)
+{
+    std::ofstream outfile;
+    outfile.open(path);
+    for (auto &s : data) {
+        outfile << s << std::endl;
+    }
+    outfile.close();
+}
 
 
 std::vector<std::string> AppendStuff(std::vector<std::string> &data, const std::string ext, const uint step)
@@ -166,20 +185,16 @@ std::vector<std::string> AppendStuff(std::vector<std::string> &data, const std::
             if (angle.length() == 2) {
                 angle.insert(angle.begin(), '0');
             }
-            ss.clear();
 
-            ss << rot << angle << flipv;
-            temp1.insert(temp1.length() - ext.length(), ss.str());
+            std::stringstream ss1;
+            ss1 << rot << angle << flipv;
+            temp1.insert(temp1.length() - ext.length(), ss1.str());
             output.push_back(temp1);
-            ss.clear();
 
-            ss << rot << angle << flipn;
-            temp2.insert(temp2.length() - ext.length(), ss.str());
+            std::stringstream ss2;
+            ss2 << rot << angle << flipn;
+            temp2.insert(temp2.length() - ext.length(), ss2.str());
             output.push_back(temp2);
-
-            std::cout << temp1 << std::endl;
-            std::cout << temp2 << std::endl;
-
         }
     }
     return output;
