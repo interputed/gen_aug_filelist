@@ -2,8 +2,6 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
-#include <algorithm>
-#include <cstring>
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
