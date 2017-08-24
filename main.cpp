@@ -69,7 +69,7 @@ int main(int argc, char **argv)
             throw std::invalid_argument(std::string("Invalid file path."));
         }
 
-        const std::string abs_path = input_path.string();
+        const std::string abs_path = input_path.string().c_str();
         std::vector<std::string> file_data;
         LoadData(abs_path, file_data);
 
@@ -84,9 +84,10 @@ int main(int argc, char **argv)
             }
 
             std::cout << std::endl;
+            std::cout << "Augmenting " << file_data.size() << " filenames..." << std::endl;
+
         }
 
-        std::cout << "Augmenting " << file_data.size() << " filenames..." << std::endl;
         std::vector<std::pair<std::string, std::string>> parsed_data = ParseLine(file_data);
         std::vector<std::string> output = Insertion(parsed_data, rotation_step);
 
@@ -99,9 +100,15 @@ int main(int argc, char **argv)
             std::cout << std::endl;
         }
 
+        std::sort(output.begin(), output.end());
         const std::string out_file = "augmented_" + abs_path;
         WriteData(out_file, output);
-        std::cout << output.size() << " filenames written to " << out_file << std::endl;
+
+        if (verbosity) {
+            std::cout << output.size() << " filenames written to " << out_file << std::endl;
+
+        }
+
     }
     catch(std::exception &e) { // If getting this regularly, more exception handling should be added.
         std::cerr << "Unhandled exception reached top level: " << e.what() << ", exiting application." << std::endl;
@@ -145,8 +152,18 @@ std::vector<std::pair<std::string, std::string>> ParseLine(std::vector<std::stri
 
     for (auto &s : data) {
         std::vector<std::string> lines;
-        boost::split(lines, s, boost::is_any_of(" "));
-        output.push_back(std::make_pair(lines[0], lines[1]));
+//        boost::split(lines, s, boost::is_any_of(" "));
+//        output.push_back(std::make_pair(lines[0], lines[1]));
+
+        char *line = (char*)s.c_str();
+        const char *delim = " ";
+        char *token = std::strtok(line, delim);
+        std::vector<std::string> temp;
+        while (token) {
+            temp.emplace_back(token);
+            token = std::strtok(NULL, delim);
+        }
+        output.push_back(std::make_pair(temp[0], temp[1]));
 
     }
 
@@ -155,35 +172,34 @@ std::vector<std::pair<std::string, std::string>> ParseLine(std::vector<std::stri
 
 std::vector<std::string> Insertion(std::vector<std::pair<std::string, std::string>> data, const uint step)
 {
-    const std::string rot = "_rot_";
-    const std::string flip_v = "_flip_v";
-    const std::string flip_n = "_flip_n";
+    const char *rot = "_rot_";
+    const char *flip_v = "_flip_v";
+    const char *flip_n = "_flip_n";
     std::vector<std::string> output;
-    output.reserve(data.size());
+    output.reserve(data.size() * (360 / step) * 2);
 
     for (auto &s : data) {
         fs::path path(s.first);
-        const std::string class_id(s.second);
+        const std::string class_id(' ' + s.second);
 
-        const std::string ext = path.extension().string();
-        const std::string stem = path.stem().string();
-        std::string dir = path.remove_filename().string();
-        const char slash = '/';
-        const char space = ' ';
+        const std::string ext = path.extension().string().c_str();
+        const std::string stem = path.stem().string().c_str();
+        const std::string dir = path.remove_filename().string() + '/';
 
-        for (int deg = 0; deg < 360; deg += step) {
-            std::stringstream line_v;
-            std::stringstream line_n;
-            line_v << dir << slash << stem << rot << deg << flip_v << ext;
-            line_n << dir << slash << stem << rot << deg << flip_n << ext;
-            output.push_back(line_v.str() + space + class_id);
-            output.push_back(line_n.str() + space + class_id);
+        for (auto deg_int = 0; deg_int < 360; deg_int += step) {
+            std::string deg = std::to_string(deg_int);
+
+            // Pad with zeroes
+            if (deg.length() == 1) {
+                deg.insert(0, "00");
+            }
+            else if (deg.length() == 2) {
+                deg.insert(0, "0");
+            }
+
+            output.push_back(dir + stem + rot + deg + flip_v + ext + class_id);
+            output.push_back(dir + stem + rot + deg + flip_n + ext + class_id);
         }
-
-        std::cout << ".";
     }
-
-    std::cout << std::endl;
-
     return output;
 }
