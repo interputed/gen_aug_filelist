@@ -3,7 +3,6 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
-#include <string>
 #include <cstring>
 
 #include <boost/program_options.hpp>
@@ -27,9 +26,9 @@ std::vector<std::string> Insertion(std::vector<std::pair<std::string, std::strin
 
 int main(int argc, char **argv)
 {
+
     try {
         po::options_description desc("Options");
-
         desc.add_options()
                 ("help,h", "Display usage information")
                 ("filelist,f", po::value<std::string>()->required(), "Required: Fold file list")
@@ -44,18 +43,21 @@ int main(int argc, char **argv)
 
         try { // Help Section
             po::store(po::command_line_parser(argc, argv).options(desc).positional(positional_options).run(), vm);
+
             if (vm.count("help")) {
                 std::cout << "Generate Augmented File List" << std::endl << std::endl
                           << "Usage: '" << argv[0] << " [OPTIONS] <fold_file_list> <rotation_step>'" << std::endl << std::endl
                           << desc << std::endl << std::endl;
                 return SUCCESS;
             }
+
             po::notify(vm);
 
         }
         catch(po::error &e) {
             std::cerr << "ERROR: " << e.what() << std::endl;
             std::cout << "Try '" << argv[0] << " --help' for more information." << std::endl;
+
             return ERROR_COMMAND_LINE;
         }
 
@@ -70,7 +72,6 @@ int main(int argc, char **argv)
         }
 
         const std::string abs_path = input_path.string();
-
         std::vector<std::string> file_data;
         LoadData(abs_path, file_data);
 
@@ -79,22 +80,30 @@ int main(int argc, char **argv)
                       << "File List Path: " << abs_path << std::endl
                       << "Rotation Step (degrees): " << rotation_step << std::endl;
             std::cout << "\nFile contents..." << std::endl;
+
             for (auto &s : file_data) {
                 std::cout << "\t" << s << std::endl;
             }
-        }
-        std::cout << "Augmenting " << file_data.size() << "filenames..." << std::endl << std::endl;
 
+            std::cout << std::endl;
+        }
+
+        std::cout << "Augmenting " << file_data.size() << " filenames..." << std::endl;
         std::vector<std::pair<std::string, std::string>> parsed_data = ParseLine(file_data);
         std::vector<std::string> output = Insertion(parsed_data, rotation_step);
+
         if (verbosity) {
+
             for (auto &s : output) {
                 std::cout << s << std::endl;
             }
+
+            std::cout << std::endl;
         }
 
-        WriteData("augmented_" + abs_path, output);
-
+        const std::string out_file = "augmented_" + abs_path;
+        WriteData(out_file, output);
+        std::cout << output.size() << " filenames written to " << out_file << std::endl;
     }
     catch(std::exception &e) { // If getting this regularly, more exception handling should be added.
         std::cerr << "Unhandled exception reached top level: " << e.what() << ", exiting application." << std::endl;
@@ -111,6 +120,7 @@ void LoadData(const std::string path, std::vector<std::string> &data)
 {
     std::ifstream fin(path);
     std::string line;
+
     while (std::getline(fin, line)) {
         data.emplace_back(line);
     }
@@ -121,12 +131,13 @@ void WriteData(const std::string path, std::vector<std::string> &data)
 {
     std::ofstream outfile;
     outfile.open(path);
+
     for (auto &s : data) {
         outfile << s << std::endl;
     }
+
     outfile.close();
 }
-
 
 std::vector<std::pair<std::string, std::string>> ParseLine(std::vector<std::string> &data)
 {
@@ -135,7 +146,6 @@ std::vector<std::pair<std::string, std::string>> ParseLine(std::vector<std::stri
     output.reserve(data.size());
 
     for (auto &s : data) {
-
         std::vector<std::string> lines;
         boost::split(lines, s, boost::is_any_of(" "));
         output.push_back(std::make_pair(lines[0], lines[1]));
@@ -171,6 +181,11 @@ std::vector<std::string> Insertion(std::vector<std::pair<std::string, std::strin
             output.push_back(line_v.str() + space + class_id);
             output.push_back(line_n.str() + space + class_id);
         }
+
+        std::cout << ".";
     }
+
+    std::cout << std::endl;
+
     return output;
 }
