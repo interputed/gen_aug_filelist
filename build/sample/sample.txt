@@ -1,9 +1,0 @@
-chaparral/chaparral14.png
-chaparral/chaparral28.png
-chaparral/chaparral42.png
-foo/bar1.png
-foo/bar2.png
-disney/mickey10.png
-disney/goofy7.png
-derp/rand001.png
-derp/rand002.png

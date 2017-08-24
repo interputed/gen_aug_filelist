@@ -2,28 +2,32 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <string>
+#include <cstring>
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/algorithm/string.hpp>
 
 typedef unsigned int uint;
-
-void LoadData(const std::string path, std::vector<std::string> &data);
-void WriteData(const std::string path, std::vector<std::string> &data);
-std::vector<std::string> ParseCategories(std::vector<std::string> &data);
-std::vector<std::string> AppendStuff(std::vector<std::string> &data, const std::string ext, const uint step);
-
-
+namespace fs = boost::filesystem;
+namespace po = boost::program_options;
 namespace {
     const size_t SUCCESS = 0;
     const size_t ERROR_COMMAND_LINE = 1;
     const size_t ERROR_UNHANDLED_EXCEPTION = 2;
 }
 
+void LoadData(const std::string path, std::vector<std::string> &data);
+void WriteData(const std::string path, std::vector<std::string> &data);
+std::vector<std::pair<std::string, std::string>> ParseLine(std::vector<std::string> &data);
+std::vector<std::string> Insertion(std::vector<std::pair<std::string, std::string>> data, const uint step);
+
+
 int main(int argc, char **argv)
 {
     try {
-        namespace po = boost::program_options;
         po::options_description desc("Options");
 
         desc.add_options()
@@ -56,7 +60,6 @@ int main(int argc, char **argv)
         }
 
         // Main Program
-        namespace fs = boost::filesystem;
         const bool verbosity = vm.count("verbose") ? true : false;
         const uint rotation_step = vm["rot_step"].as<uint>();
         fs::path input_path(vm["filelist"].as<std::string>());
@@ -66,58 +69,31 @@ int main(int argc, char **argv)
             throw std::invalid_argument(std::string("Invalid file path."));
         }
 
-
-        const auto file_size = fs::file_size(input_path);
         const std::string abs_path = input_path.string();
-        const std::string stem = input_path.stem().string();
-        const std::string type = input_path.extension().string();
-        // Next one is destructive, don't re-use input_path.
-        const std::string dir_path = input_path.remove_filename().string();
-
-        std::cout << "\nDebug info...\n"
-                  << "File List Path: " << abs_path << std::endl
-                  << "Rotation Step (degrees): " << rotation_step << std::endl;
-        // Optional output when verbose flag used.
-        if (verbosity) {
-            std::cout << "\nOptional info...\n"
-                      << "Directory Path: " << dir_path << "\n"
-                      << "Filename without extension: " << stem << "\n"
-                      << "File Extension: " << type << "\n"
-                      << "File Size (bytes): " << file_size << std::endl;
-
-        }
 
         std::vector<std::string> file_data;
         LoadData(abs_path, file_data);
+
         if (verbosity) {
+            std::cout << "\nDebug info...\n"
+                      << "File List Path: " << abs_path << std::endl
+                      << "Rotation Step (degrees): " << rotation_step << std::endl;
             std::cout << "\nFile contents..." << std::endl;
             for (auto &s : file_data) {
                 std::cout << "\t" << s << std::endl;
             }
         }
-        std::cout << "Lines loaded: " << file_data.size() << std::endl;
+        std::cout << "Augmenting " << file_data.size() << "filenames..." << std::endl << std::endl;
 
-        std::vector<std::string> output_data = AppendStuff(file_data, type, rotation_step);
-
+        std::vector<std::pair<std::string, std::string>> parsed_data = ParseLine(file_data);
+        std::vector<std::string> output = Insertion(parsed_data, rotation_step);
         if (verbosity) {
-            for (auto &s : output_data) {
+            for (auto &s : output) {
                 std::cout << s << std::endl;
             }
         }
 
-        WriteData("output.txt", output_data);
-
-
-
-        // Categories seem largely unnecessary in C++, wrote a parser before realizing this...
-//        std::vector<std::string> categories = ParseCategories(file_data);
-//        if (verbosity) {
-//            std::cout << "\nCategories..." << std::endl;
-//            for (auto &s : categories) {
-//                std::cout << "\t" << s << std::endl;
-//            }
-//        }
-//        std::cout << "Categories found: " << categories.size() << std::endl;
+        WriteData("augmented_" + abs_path, output);
 
     }
     catch(std::exception &e) { // If getting this regularly, more exception handling should be added.
@@ -129,27 +105,16 @@ int main(int argc, char **argv)
 }
 
 
-std::vector<std::string> ParseCategories(std::vector<std::string> &data)
-{
-    std::vector<std::string> cats;
-    char delim = '/';
-    std::string tok;
 
-    for (auto &s : data) {
-        tok = s.substr(0, s.find(delim));
-        cats.push_back(tok);
-    }
-
-    std::sort(cats.begin(), cats.end());
-    cats.erase(std::unique(cats.begin(), cats.end()), cats.end());
-    return cats;
-}
 
 void LoadData(const std::string path, std::vector<std::string> &data)
 {
     std::ifstream fin(path);
-    std::copy(std::istream_iterator<std::string>(fin), std::istream_iterator<std::string>(), std::back_inserter(data));
-    // TODO: Error handling
+    std::string line;
+    while (std::getline(fin, line)) {
+        data.emplace_back(line);
+    }
+
 }
 
 void WriteData(const std::string path, std::vector<std::string> &data)
@@ -163,38 +128,48 @@ void WriteData(const std::string path, std::vector<std::string> &data)
 }
 
 
-std::vector<std::string> AppendStuff(std::vector<std::string> &data, const std::string ext, const uint step)
+std::vector<std::pair<std::string, std::string>> ParseLine(std::vector<std::string> &data)
 {
-    const std::string rot = "_rot_";
-    const std::string flipv = "_flip_v";
-    const std::string flipn = "_flip_n";
-    std::vector<std::string> output;
+
+    std::vector<std::pair<std::string, std::string>> output;
+    output.reserve(data.size());
 
     for (auto &s : data) {
-        for (int i = 0; i < 360; i += step) {
-            std::string temp1 = s;
-            std::string temp2 = s;
-            std::stringstream ss;
-            ss << i;
-            std::string angle = ss.str();
 
-            if (angle.length() == 1) {
-                angle.insert(angle.begin(), '0');
-                angle.insert(angle.begin(), '0');
-            }
-            if (angle.length() == 2) {
-                angle.insert(angle.begin(), '0');
-            }
+        std::vector<std::string> lines;
+        boost::split(lines, s, boost::is_any_of(" "));
+        output.push_back(std::make_pair(lines[0], lines[1]));
 
-            std::stringstream ss1;
-            ss1 << rot << angle << flipv;
-            temp1.insert(temp1.length() - ext.length(), ss1.str());
-            output.push_back(temp1);
+    }
 
-            std::stringstream ss2;
-            ss2 << rot << angle << flipn;
-            temp2.insert(temp2.length() - ext.length(), ss2.str());
-            output.push_back(temp2);
+    return output;
+}
+
+std::vector<std::string> Insertion(std::vector<std::pair<std::string, std::string>> data, const uint step)
+{
+    const std::string rot = "_rot_";
+    const std::string flip_v = "_flip_v";
+    const std::string flip_n = "_flip_n";
+    std::vector<std::string> output;
+    output.reserve(data.size());
+
+    for (auto &s : data) {
+        fs::path path(s.first);
+        const std::string class_id(s.second);
+
+        const std::string ext = path.extension().string();
+        const std::string stem = path.stem().string();
+        std::string dir = path.remove_filename().string();
+        const char slash = '/';
+        const char space = ' ';
+
+        for (int deg = 0; deg < 360; deg += step) {
+            std::stringstream line_v;
+            std::stringstream line_n;
+            line_v << dir << slash << stem << rot << deg << flip_v << ext;
+            line_n << dir << slash << stem << rot << deg << flip_n << ext;
+            output.push_back(line_v.str() + space + class_id);
+            output.push_back(line_n.str() + space + class_id);
         }
     }
     return output;
